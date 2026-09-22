@@ -1,0 +1,20 @@
+# Ambiente
+.venv/
+__pycache__/
+*.pyc
+*__init__.py
+data/
+
+# Spark / Delta (modo local — o padrão usa MinIO)
+spark-warehouse/
+metastore_db/
+metastore_minio/
+derby.log
+spark-warehouse/
+*.log
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Secrets
+.env
