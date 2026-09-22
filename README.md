@@ -73,6 +73,9 @@ source .venv/bin/activate
 # Instalar dependências
 pip install -r requirements.txt
 
+# Configurar variáveis (Spark, Delta, MinIO, flags do projeto)
+cp .env.example .env   # e ajuste se necessário
+
 # Iniciar MinIO (obrigatório por padrão) — Docker ou Podman
 docker run -d \
   --name minio \
@@ -96,7 +99,7 @@ podman run -d \
 
 ## ▶️ Como Rodar
 
-A sessão Spark (Delta + hadoop-aws + `config/spark-defaults.conf`) é criada por `src/session.py`.
+A sessão Spark (Delta + hadoop-aws) é criada por `src/session.py`, com **todas as variáveis vindo do `.env`** (Spark, Delta, MinIO e flags).
 **O padrão é MinIO**: os dados ficam no bucket `lake` (`s3a://lake/warehouse`), criado automaticamente se não existir.
 
 ```bash
@@ -129,8 +132,7 @@ Na primeira execução o Spark baixa os JARs de Delta Lake e hadoop-aws (requer 
 08-data-lakehouse-medallion/
 ├── README.md
 ├── requirements.txt
-├── config/
-│   └── spark-defaults.conf
+├── .env.example                  # Template das variáveis (copie para .env)
 ├── data/                        # CSVs de entrada
 │   ├── customers.csv
 │   ├── order_items.csv
