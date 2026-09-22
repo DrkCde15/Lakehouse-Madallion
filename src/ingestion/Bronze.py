@@ -1,5 +1,6 @@
 """Camada Bronze: ingestão dos CSVs brutos para tabelas Delta."""
 
+import logging
 import sys
 from pathlib import Path
 
@@ -10,6 +11,8 @@ if str(ROOT) not in sys.path:
 from pyspark.sql.functions import current_timestamp
 
 from src.session import get_spark
+
+logger = logging.getLogger(__name__)
 
 BRONZE_CSV_DIR = ROOT / "data"
 TABLE_NAMES = ("payments", "customers", "orders", "order_items", "products", "reviews")
@@ -43,10 +46,12 @@ def run(spark):
             .mode("overwrite")
             .saveAsTable(full_table_name)
         )
-        print(f"✓ Tabela {full_table_name} salva com sucesso!")
-        print(f"  Linhas: {df.count()} | Colunas: {len(df.columns)}")
+        logger.info(
+            "Tabela %s salva | %d linhas | %d colunas",
+            full_table_name, df.count(), len(df.columns),
+        )
 
-    print("\n✅ Camada Bronze concluída! Todas as tabelas foram persistidas em formato Delta.")
+    logger.info("Camada Bronze concluída — tabelas Delta persistidas.")
     return tables
 
 

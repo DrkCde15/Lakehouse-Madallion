@@ -1,5 +1,6 @@
 """Camada Gold: agregações de negócio prontas para BI."""
 
+import logging
 import sys
 from pathlib import Path
 
@@ -18,6 +19,8 @@ from pyspark.sql.functions import (
 
 from src.session import get_spark
 
+logger = logging.getLogger(__name__)
+
 SILVER_TABLES = ("payments", "customers", "orders", "order_items", "products", "reviews")
 
 
@@ -25,7 +28,7 @@ def load_silver(spark) -> dict:
     tables = {}
     for table_name in SILVER_TABLES:
         tables[table_name] = spark.table(f"silver.{table_name}")
-        print(f"✓ silver.{table_name} carregada | {tables[table_name].count()} linhas")
+        logger.info("silver.%s carregada | %d linhas", table_name, tables[table_name].count())
     return tables
 
 
@@ -105,17 +108,17 @@ GOLD_BUILDERS = {
 def run(spark, show: bool = False):
     spark.sql("CREATE DATABASE IF NOT EXISTS gold")
 
-    print("Tabelas Silver carregadas e prontas para agregação.\n")
+    logger.info("Carregando tabelas Silver para agregação...")
     silver = load_silver(spark)
 
     for table_name, builder in GOLD_BUILDERS.items():
         df = builder(silver)
         df.write.format("delta").mode("overwrite").option("overwriteSchema", "true").saveAsTable(f"gold.{table_name}")
-        print(f"✓ gold.{table_name} criada")
+        logger.info("gold.%s criada", table_name)
         if show:
             df.show(truncate=False)
 
-    print("\nCamada Gold concluída!")
+    logger.info("Camada Gold concluída.")
 
 
 def main():

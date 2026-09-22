@@ -1,5 +1,6 @@
 """Factory de SparkSession com Delta Lake, hadoop-aws (S3A) e config do projeto."""
 
+import logging
 import os
 import sys
 from pathlib import Path
@@ -11,6 +12,13 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 CONF_PATH = ROOT / "config" / "spark-defaults.conf"
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    datefmt="%H:%M:%S",
+)
+logger = logging.getLogger(__name__)
 
 _PACKAGES = (
     "io.delta:delta-spark_2.12:3.2.0",
@@ -53,9 +61,9 @@ def ensure_minio_bucket(props: dict) -> str:
     )
     if not client.bucket_exists(bucket):
         client.make_bucket(bucket)
-        print(f"✓ Bucket '{bucket}' criado no MinIO")
+        logger.info("Bucket '%s' criado no MinIO", bucket)
     else:
-        print(f"✓ Bucket '{bucket}' já existe no MinIO")
+        logger.info("Bucket '%s' já existe no MinIO", bucket)
     return bucket
 
 
@@ -88,7 +96,7 @@ def get_spark(app_name: str = "DataLakehouseMedallion", use_minio: bool | None =
             # Metastore separado do modo local (não mistura paths s3a com ./spark-warehouse)
             .config("javax.jdo.option.ConnectionURL", "jdbc:derby:;databaseName=metastore_minio;create=true")
         )
-        print(f"Storage: MinIO (s3a://{bucket}/warehouse)")
+        logger.info("Storage: MinIO (s3a://%s/warehouse)", bucket)
     else:
         warehouse = ROOT / "spark-warehouse"
         builder = (
@@ -96,7 +104,7 @@ def get_spark(app_name: str = "DataLakehouseMedallion", use_minio: bool | None =
             .config("spark.sql.warehouse.dir", str(warehouse))
             .config("javax.jdo.option.ConnectionURL", "jdbc:derby:;databaseName=metastore_db;create=true")
         )
-        print(f"Storage: local ({warehouse})")
+        logger.info("Storage: local (%s)", warehouse)
 
     spark = builder.getOrCreate()
     spark.sparkContext.setLogLevel("WARN")

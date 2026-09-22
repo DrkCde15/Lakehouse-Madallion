@@ -9,36 +9,37 @@ Projeto de demonstração da arquitetura **Medallion** (Bronze → Silver → Go
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                        GOLD LAYER                           │
-│              Dados agregados, dimensões e fatos              │
-│            Tabelas de negócio prontas para BI                │
+│           Agregações de negócio prontas para BI             │
 ├──────────────────────────────────────────────────────────────┤
 │                       SILVER LAYER                           │
-│         Dados limpos, deduplicados e com schema             │
-│             Versão única da verdade (Single Source)          │
+│      Dados limpos, tipados e deduplicados (single source)    │
 ├──────────────────────────────────────────────────────────────┤
 │                       BRONZE LAYER                           │
-│            Dados brutos ingeridos (append mode)             │
-│            Cópia exata da fonte, sem transformação          │
+│         Dados brutos ingeridos (full refresh/overwrite)      │
+│            Cópia exata da fonte + coluna _ingested_at        │
 └──────────────────────────────────────────────────────────────┘
 ```
 
 ### Camada Bronze (Raw)
-- Ingestão de dados brutos de fontes externas (CSV, APIs, bancos de dados)
-- Armazenamento em formato **Delta Lake** com modo **append**
-- Sem transformação — preserva o estado original dos dados
-- Permite reprocessamento e auditoria histórica
+- Ingestão dos CSVs de `data/` para tabelas **Delta Lake**
+- Modo **overwrite** (full refresh a cada execução); histórico preservado pelo **Delta history**
+- Sem transformação — apenas a coluna de auditoria `_ingested_at`
 
 ### Camada Silver (Curated)
-- Limpeza: remoção de nulos, formatação de tipos, padronização
-- Deduplicação: eliminação de registros duplicados
-- Schema enforcement: garantia de consistência de esquema
-- Enriquecimento e joins entre fontes
+- Deduplicação por chave natural (ex.: `order_id`, `customer_id`)
+- Tipagem com `try_cast` (decimal, int, date) e normalização de texto
+- Defaults para nulos (`"desconhecido"`, `"não informado"`)
+- Timestamp `_ingested_at` convertido para America/Sao_Paulo
 
 ### Camada Gold (Business)
-- Agregações de negócio (métricas, KPIs)
-- Tabelas dimensionais (dim_tempo, dim_produto, dim_cliente)
-- Tabelas fatos (vendas, transações)
-- Prontas para consumo por ferramentas de BI e dashboards
+Quatro tabelas agregadas, prontas para BI:
+
+| Tabela | Conteúdo |
+|---|---|
+| `gold.vendas_por_categoria` | Receita, itens e pedidos distintos por categoria |
+| `gold.pedidos_por_status` | Contagem, receita e ticket médio por status |
+| `gold.avaliacao_produto` | Média/mín/máx de notas por produto (sem fan-out) |
+| `gold.resumo_clientes` | Gasto total, ticket médio e período de pedidos por cliente |
 
 ---
 
@@ -49,15 +50,15 @@ Projeto de demonstração da arquitetura **Medallion** (Bronze → Silver → Go
 | Processamento    | Apache Spark 3.x   |
 | Formato de Dados | Delta Lake         |
 | Lake de Objetos  | MinIO (S3)         |
-| Linguagem        | Python 3.10+       |
+| Linguagem        | Python 3.11+      |
 | Ambiente Dev     | Jupyter Notebook   |
 
 ---
 
 ## 🚀 Pré-requisitos
 
-- Python 3.10+
-- Docker (para MinIO)
+- Python 3.11+
+- Docker ou Podman (para MinIO)
 - Java 11+ (para Spark)
 
 ---
@@ -65,7 +66,7 @@ Projeto de demonstração da arquitetura **Medallion** (Bronze → Silver → Go
 ## 📦 Instalação
 
 ```bash
-# Criar ambiente virtual (Python 3.10/3.11)
+# Criar ambiente virtual (Python 3.11+)
 python3.11 -m venv .venv
 source .venv/bin/activate
 
@@ -113,6 +114,9 @@ USE_MINIO=0 python -m src.serving.Gold
 
 # Notebook
 jupyter lab notebooks/01_medallion_overview.ipynb
+
+# Testes
+pytest tests/ -v
 ```
 
 Na primeira execução o Spark baixa os JARs de Delta Lake e hadoop-aws (requer internet).
@@ -149,7 +153,9 @@ Na primeira execução o Spark baixa os JARs de Delta Lake e hadoop-aws (requer 
 ├── notebooks/
 │   └── 01_medallion_overview.ipynb
 └── tests/
-    └── __init__.py
+    ├── conftest.py               # Fixture da SparkSession de teste
+    ├── test_silver.py            # Transforms da camada Silver
+    └── test_gold.py              # Agregações da camada Gold
 ```
 
 ---

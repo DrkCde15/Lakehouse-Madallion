@@ -1,5 +1,6 @@
 """Camada Silver: limpeza, deduplicação, tipagem e normalização das tabelas Bronze."""
 
+import logging
 import sys
 from pathlib import Path
 
@@ -21,6 +22,8 @@ from pyspark.sql.functions import (
 )
 
 from src.session import get_spark
+
+logger = logging.getLogger(__name__)
 
 # Chave natural de cada tabela (deduplicação na Silver)
 DEDUP_KEYS = {
@@ -129,13 +132,16 @@ def run(spark, preview: bool = False):
         df = move_column_to_end(df, "_ingested_at")
 
         df.write.format("delta").mode("overwrite").option("overwriteSchema", "true").saveAsTable(f"silver.{table_name}")
-        print(f"✓ silver.{table_name} | {df.count()} linhas | {len(df.columns)} colunas")
+        logger.info(
+            "silver.%s | %d linhas | %d colunas",
+            table_name, df.count(), len(df.columns),
+        )
 
-    print("\nCamada Silver concluída!")
+    logger.info("Camada Silver concluída.")
 
     if preview:
         for table_name in TABLE_TRANSFORMS:
-            print(f"\n{'=' * 50}\nsilver.{table_name}\n{'=' * 50}")
+            logger.info("Preview silver.%s (10 linhas)", table_name)
             spark.table(f"silver.{table_name}").limit(10).show(truncate=False)
 
 
