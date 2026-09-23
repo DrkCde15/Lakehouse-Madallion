@@ -126,6 +126,9 @@ USE_MINIO=0 python -m src.serving.Gold
 # Data quality (bronze|silver|gold) — exit 1 se houver ERROR
 python -m src.dq.checks silver
 
+# Recriar os CSVs de data/ (determinístico por --seed; --clean sem sujeira de exemplo)
+python -m scripts.generate_data
+
 # Notebook
 jupyter lab notebooks/01_medallion_overview.ipynb
 
@@ -183,6 +186,8 @@ podman-compose down
 │   ├── payments.csv
 │   ├── products.csv
 │   └── reviews.csv
+├── scripts/
+│   └── generate_data.py         # Recria data/*.csv (determinístico, com sujeira de exemplo)
 ├── airflow/
 │   ├── Dockerfile                # Airflow + Java 17 + PySpark + Delta
 │   ├── requirements.txt          # Dependências dos jobs Spark no container
@@ -209,7 +214,8 @@ podman-compose down
     ├── conftest.py               # Fixture da SparkSession de teste
     ├── test_silver.py            # Transforms da camada Silver
     ├── test_gold.py              # Agregações da camada Gold
-    └── test_dq.py                # Checks de data quality
+    ├── test_dq.py                # Checks de data quality
+    └── test_generate_data.py     # Gerador de dados
 ```
 
 ---
