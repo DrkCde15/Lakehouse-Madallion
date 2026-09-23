@@ -3,6 +3,7 @@
 __pycache__/
 *.pyc
 data/
+.pytest_cache/
 
 # Spark / Delta (modo local — o padrão usa MinIO)
 spark-warehouse/
@@ -13,6 +14,10 @@ derby.log
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Airflow (mantém apenas o .gitkeep)
+airflow/logs/*
+!airflow/logs/.gitkeep
 
 # Secrets
 .env

@@ -1,0 +1,134 @@
+x-airflow-common-env: &airflow-common-env
+  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+  AIRFLOW__CORE__FERNET_KEY: "81HqDtbqAywKSOumSha3BhWNOdQ26slT6K0YaZeZyPs="
+  AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+  AIRFLOW__CORE__EXECUTOR: LocalExecutor
+  AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
+  # Endpoint S3A dos containers (rede interna). No host o .env usa localhost:9000 —
+  # load_dotenv(override=False) em src/session.py faz esta env vencer o .env.
+  spark.hadoop.fs.s3a.endpoint: "http://minio:9000"
+  spark.hadoop.fs.s3a.connection.ssl.enabled: "false"
+  USE_MINIO: "true"
+  MINIO_BUCKET: "lake"
+
+x-airflow-volumes: &airflow-volumes
+  - ./airflow/dags:/opt/airflow/dags
+  - ./airflow/logs:/opt/airflow/logs
+  - .:/opt/project
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: medallion_postgres
+    environment:
+      POSTGRES_DB: airflow
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow -d airflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - medallion_net
+
+  minio:
+    image: minio/minio:latest
+    container_name: medallion_minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - medallion_net
+
+  airflow-init:
+    build:
+      context: .
+      dockerfile: airflow/Dockerfile
+    container_name: medallion_airflow_init
+    restart: "no"
+    environment:
+      <<: *airflow-common-env
+      _AIRFLOW_DB_MIGRATE: "true"
+    user: root
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db migrate
+        airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com || true
+        echo "Airflow init done!"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - medallion_net
+
+  airflow-webserver:
+    build:
+      context: .
+      dockerfile: airflow/Dockerfile
+    container_name: medallion_airflow_webserver
+    restart: unless-stopped
+    environment: *airflow-common-env
+    volumes: *airflow-volumes
+    user: root
+    command: airflow webserver
+    ports:
+      - "8080:8080"
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - medallion_net
+
+  airflow-scheduler:
+    build:
+      context: .
+      dockerfile: airflow/Dockerfile
+    container_name: medallion_airflow_scheduler
+    restart: unless-stopped
+    environment: *airflow-common-env
+    volumes: *airflow-volumes
+    user: root
+    command: airflow scheduler
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - medallion_net
+
+networks:
+  medallion_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  minio_data:

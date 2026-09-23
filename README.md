@@ -50,6 +50,7 @@ Quatro tabelas agregadas, prontas para BI:
 | Processamento    | Apache Spark 3.x   |
 | Formato de Dados | Delta Lake         |
 | Lake de Objetos  | MinIO (S3)         |
+| Orquestração     | Apache Airflow (Podman) |
 | Linguagem        | Python 3.11+      |
 | Ambiente Dev     | Jupyter Notebook   |
 
@@ -76,23 +77,17 @@ pip install -r requirements.txt
 # Configurar variáveis (Spark, Delta, MinIO, flags do projeto)
 cp .env.example .env   # e ajuste se necessário
 
-# Iniciar MinIO (obrigatório por padrão) — Docker ou Podman
-docker run -d \
-  --name minio \
-  -p 9000:9000 \
-  -p 9001:9001 \
-  -e MINIO_ROOT_USER=minioadmin \
-  -e MINIO_ROOT_PASSWORD=minioadmin \
-  minio/minio server /data --console-address ":9001"
+# Iniciar MinIO — via Podman Compose (recomendado, sobe junto com o Airflow)
+podman-compose up -d minio
 
-# ou com Podman:
+# ou manualmente:
 podman run -d \
   --name minio \
   -p 9000:9000 \
   -p 9001:9001 \
   -e MINIO_ROOT_USER=minioadmin \
   -e MINIO_ROOT_PASSWORD=minioadmin \
-  quay.io/minio/minio server /data --console-address ":9001"
+  minio/minio server /data --console-address ":9001"
 ```
 
 ---
@@ -126,12 +121,43 @@ Na primeira execução o Spark baixa os JARs de Delta Lake e hadoop-aws (requer 
 
 ---
 
+## 🔁 Orquestração com Airflow (Podman)
+
+O pipeline também roda orquestrado pelo **Apache Airflow**: 1 DAG (`medallion_pipeline`)
+com 3 tasks sequenciais (`bronze_ingest >> silver_process >> gold_aggregate`), executando
+os mesmos jobs PySpark via `BashOperator`. O compose sobe **Postgres** (metadata do Airflow),
+**MinIO** e o **Airflow** (imagem custom com Java 17 + PySpark + Delta, JARs pré-baixados no build).
+
+```bash
+# Subir tudo
+podman-compose up -d --build
+
+# Airflow UI -> http://localhost:8080  (admin / admin)
+# MinIO Console -> http://localhost:9001  (minioadmin / minioadmin)
+
+# Disparar a DAG manualmente pela UI, ou via CLI:
+podman exec medallion_airflow_scheduler airflow dags trigger medallion_pipeline
+
+# Parar tudo
+podman-compose down
+```
+
+- Agendamento: `@daily` com `catchup=False` e `max_active_runs=1` (o Derby metastore
+  não aceita escrita concorrente — as tasks já rodam em sequência).
+- **Endpoint S3A**: dentro dos containers é `http://minio:9000` (injetado pelo compose);
+  no host continua `http://localhost:9000` (do `.env`). O `.env` não muda — o compose
+  apenas sobrepõe essa variável no ambiente dos containers.
+- Modo só-host (sem Airflow): `podman-compose up -d minio` e os comandos da seção acima.
+
+---
+
 ## 📁 Estrutura do Projeto
 
 ```
 08-data-lakehouse-medallion/
 ├── README.md
 ├── requirements.txt
+├── docker-compose.yml               # Postgres + MinIO + Airflow (Podman)
 ├── .env.example                  # Template das variáveis (copie para .env)
 ├── data/                        # CSVs de entrada
 │   ├── customers.csv
@@ -140,6 +166,11 @@ Na primeira execução o Spark baixa os JARs de Delta Lake e hadoop-aws (requer 
 │   ├── payments.csv
 │   ├── products.csv
 │   └── reviews.csv
+├── airflow/
+│   ├── Dockerfile                # Airflow + Java 17 + PySpark + Delta
+│   ├── requirements.txt          # Dependências dos jobs Spark no container
+│   └── dags/
+│       └── medallion_pipeline.py # DAG: bronze >> silver >> gold (BashOperator)
 ├── src/
 │   ├── __init__.py
 │   ├── session.py               # SparkSession (Delta + S3A + conf)
