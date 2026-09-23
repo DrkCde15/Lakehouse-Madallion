@@ -1,6 +1,6 @@
 x-airflow-common-env: &airflow-common-env
-  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
-  AIRFLOW__CORE__FERNET_KEY: "81HqDtbqAywKSOumSha3BhWNOdQ26slT6K0YaZeZyPs="
+  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:${POSTGRES_PASSWORD:-airflow}@postgres:5432/airflow
+  AIRFLOW__CORE__FERNET_KEY: "${AIRFLOW_FERNET_KEY:?Defina AIRFLOW_FERNET_KEY no .env — gere uma chave nova, veja .env.example}"
   AIRFLOW__CORE__LOAD_EXAMPLES: "false"
   AIRFLOW__CORE__EXECUTOR: LocalExecutor
   AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
@@ -23,7 +23,7 @@ services:
     environment:
       POSTGRES_DB: airflow
       POSTGRES_USER: airflow
-      POSTGRES_PASSWORD: airflow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-airflow}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -39,8 +39,8 @@ services:
     container_name: medallion_minio
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -69,7 +69,7 @@ services:
       - -c
       - |
         airflow db migrate
-        airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com || true
+        airflow users create --username admin --password "${AIRFLOW_ADMIN_PASSWORD:-admin}" --firstname Admin --lastname User --role Admin --email admin@example.com || true
         echo "Airflow init done!"
     depends_on:
       postgres:

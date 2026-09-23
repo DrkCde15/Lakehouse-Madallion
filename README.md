@@ -113,6 +113,9 @@ A sessão Spark (Delta + hadoop-aws) é criada por `src/session.py`, com **todas
 ```bash
 source .venv/bin/activate
 
+# Passo 0 — gerar os CSVs de data/ (obrigatório em clone novo: data/ não é versionado)
+python -m scripts.generate_data
+
 # Padrão (MinIO) — requer o container em http://localhost:9000
 python -m src.ingestion.Bronze
 python -m src.processing.Silver
@@ -149,6 +152,10 @@ O compose sobe **Postgres** (metadata do Airflow), **MinIO** e o **Airflow**
 (imagem custom com Java 17 + PySpark + Delta, JARs pré-baixados no build).
 
 ```bash
+# 0) Obrigatório: definir AIRFLOW_FERNET_KEY no .env (repo público — nada de chave no git)
+#    Gere uma chave nova e cole no .env:
+python3 -c "import os, base64; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
+
 # Subir tudo
 podman-compose up -d --build
 
@@ -168,6 +175,12 @@ podman-compose down
   no host continua `http://localhost:9000` (do `.env`). O `.env` não muda — o compose
   apenas sobrepõe essa variável no ambiente dos containers.
 - Modo só-host (sem Airflow): `podman-compose up -d minio` e os comandos da seção acima.
+
+> **Segurança (repo público):** a `AIRFLOW_FERNET_KEY` é obrigatória e vive **só no `.env`**
+> (o compose falha sem ela). Os defaults `admin/admin`, `minioadmin/minioadmin` e
+> `airflow/airflow` são **apenas para ambiente local** — se for expor as portas 8080/9000/9001/5432
+> além do seu host, troque-os pelas variáveis `AIRFLOW_ADMIN_PASSWORD`, `MINIO_ROOT_*` e
+> `POSTGRES_PASSWORD` do `.env.example` antes de subir a stack.
 
 ---
 
