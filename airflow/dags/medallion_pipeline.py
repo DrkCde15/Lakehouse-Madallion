@@ -1,13 +1,16 @@
 """
 DAG principal do Apache Airflow para o pipeline medallion.
 
-Orquestra as camadas do lakehouse (Bronze -> Silver -> Gold),
-executando os jobs PySpark existentes via BashOperator:
+Orquestra as camadas do lakehouse (Bronze -> Silver -> Gold) com
+data quality entre cada camada, executando os jobs PySpark existentes
+via BashOperator:
 
-    bronze_ingest >> silver_process >> gold_aggregate
+    bronze_ingest >> check_bronze >> silver_process >> check_silver
+        >> gold_aggregate >> check_gold
 
 Cada task roda `python -m src...` com cwd=/opt/project (volume do compose),
 onde ficam data/, .env e o metastore Derby (metastore_minio/).
+Um check com erro (severity ERROR) falha a task e bloqueia a proxima camada.
 """
 
 from datetime import datetime, timedelta
@@ -44,11 +47,25 @@ with DAG(
         execution_timeout=timedelta(minutes=30),
     )
 
+    check_bronze = BashOperator(
+        task_id="check_bronze",
+        bash_command="python -m src.dq.checks bronze",
+        cwd=PROJECT_DIR,
+        execution_timeout=timedelta(minutes=15),
+    )
+
     silver_process = BashOperator(
         task_id="silver_process",
         bash_command="python -m src.processing.Silver",
         cwd=PROJECT_DIR,
         execution_timeout=timedelta(minutes=30),
+    )
+
+    check_silver = BashOperator(
+        task_id="check_silver",
+        bash_command="python -m src.dq.checks silver",
+        cwd=PROJECT_DIR,
+        execution_timeout=timedelta(minutes=15),
     )
 
     gold_aggregate = BashOperator(
@@ -58,4 +75,18 @@ with DAG(
         execution_timeout=timedelta(minutes=30),
     )
 
-    bronze_ingest >> silver_process >> gold_aggregate
+    check_gold = BashOperator(
+        task_id="check_gold",
+        bash_command="python -m src.dq.checks gold",
+        cwd=PROJECT_DIR,
+        execution_timeout=timedelta(minutes=15),
+    )
+
+    (
+        bronze_ingest
+        >> check_bronze
+        >> silver_process
+        >> check_silver
+        >> gold_aggregate
+        >> check_gold
+    )

@@ -41,6 +41,19 @@ Quatro tabelas agregadas, prontas para BI:
 | `gold.avaliacao_produto` | Média/mín/máx de notas por produto (sem fan-out) |
 | `gold.resumo_clientes` | Gasto total, ticket médio e período de pedidos por cliente |
 
+### Data Quality
+Checks custom em PySpark (`src/dq/checks.py`) rodam **entre as camadas** como tasks do Airflow:
+
+| Camada | Checks (exemplos) | Severidade |
+|---|---|---|
+| Bronze | tabela existe, não vazia, `_ingested_at` não nulo | ERROR |
+| Silver | PK única (chave natural), `rating` 1–5, `status` no domínio, referencialidade (órfãos) | ERROR |
+| Silver | valores negativos (`total_amount`, `payment_value`, `quantity`), `customer_id` sentinela | WARN |
+| Gold | métricas não nulas, `avaliacao_media` 1–5, receitas não negativas | ERROR/WARN |
+
+- **ERROR** → task falha e **bloqueia** a próxima camada
+- **WARN** → só loga (os CSVs contêm casos reais negativos, reportados sem quebrar o pipeline)
+
 ---
 
 ## 🛠 Stack Tecnológica
@@ -110,6 +123,9 @@ USE_MINIO=0 python -m src.ingestion.Bronze
 USE_MINIO=0 python -m src.processing.Silver
 USE_MINIO=0 python -m src.serving.Gold
 
+# Data quality (bronze|silver|gold) — exit 1 se houver ERROR
+python -m src.dq.checks silver
+
 # Notebook
 jupyter lab notebooks/01_medallion_overview.ipynb
 
@@ -124,9 +140,10 @@ Na primeira execução o Spark baixa os JARs de Delta Lake e hadoop-aws (requer 
 ## 🔁 Orquestração com Airflow (Podman)
 
 O pipeline também roda orquestrado pelo **Apache Airflow**: 1 DAG (`medallion_pipeline`)
-com 3 tasks sequenciais (`bronze_ingest >> silver_process >> gold_aggregate`), executando
-os mesmos jobs PySpark via `BashOperator`. O compose sobe **Postgres** (metadata do Airflow),
-**MinIO** e o **Airflow** (imagem custom com Java 17 + PySpark + Delta, JARs pré-baixados no build).
+com 6 tasks sequenciais (`bronze_ingest >> check_bronze >> silver_process >> check_silver >> gold_aggregate >> check_gold`),
+executando os jobs PySpark via `BashOperator` e os checks de data quality entre as camadas.
+O compose sobe **Postgres** (metadata do Airflow), **MinIO** e o **Airflow**
+(imagem custom com Java 17 + PySpark + Delta, JARs pré-baixados no build).
 
 ```bash
 # Subir tudo
@@ -174,6 +191,9 @@ podman-compose down
 ├── src/
 │   ├── __init__.py
 │   ├── session.py               # SparkSession (Delta + S3A + conf)
+│   ├── dq/
+│   │   ├── __init__.py
+│   │   └── checks.py            # Data quality (ERROR bloqueia / WARN loga)
 │   ├── ingestion/
 │   │   ├── __init__.py
 │   │   └── Bronze.py
@@ -188,7 +208,8 @@ podman-compose down
 └── tests/
     ├── conftest.py               # Fixture da SparkSession de teste
     ├── test_silver.py            # Transforms da camada Silver
-    └── test_gold.py              # Agregações da camada Gold
+    ├── test_gold.py              # Agregações da camada Gold
+    └── test_dq.py                # Checks de data quality
 ```
 
 ---
