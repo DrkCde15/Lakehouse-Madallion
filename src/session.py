@@ -16,6 +16,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from src.spark_runtime import align_spark_runtime
+
 load_dotenv(ROOT / ".env", override=False)
 
 logging.basicConfig(
@@ -33,6 +35,9 @@ _PACKAGES = (
 
 def _truthy(value: str) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+align_spark_runtime()
 
 
 def read_spark_env() -> dict:
