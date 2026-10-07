@@ -83,15 +83,18 @@ N_DIRTY_EMPTY_COMMENT = 5
 
 
 def _weighted(rng: random.Random, pairs) -> str:
+    """Sorteia um valor dos pares (valor, peso) usando o RNG informado."""
     values, weights = zip(*pairs)
     return rng.choices(values, weights=weights, k=1)[0]
 
 
 def _rand_date(rng: random.Random, start: date, days: int) -> date:
+    """Retorna uma data aleatória somando de 0 a days-1 dias a start."""
     return start + timedelta(days=rng.randrange(days))
 
 
 def _write_csv(path: Path, table: str, rows: list) -> None:
+    """Grava as linhas em path com o cabeçalho da tabela."""
     with path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(HEADERS[table])
@@ -232,6 +235,7 @@ def generate(
 
 
 def main(argv=None) -> None:
+    """Ponto de entrada CLI: interpreta os argumentos e gera os CSVs."""
     parser = argparse.ArgumentParser(description="Gera os CSVs da camada Bronze")
     parser.add_argument("--out", type=Path, default=OUT_DIR, help="Diretorio de saida (default: ./data)")
     parser.add_argument("--seed", type=int, default=42, help="Seed do RNG (deterministico)")

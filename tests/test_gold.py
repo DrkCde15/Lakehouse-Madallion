@@ -9,6 +9,7 @@ from src.serving.Gold import (
 
 
 def _silver(spark):
+    """Monta tabelas Silver falsas com fan-out proposital para os testes."""
     orders = spark.createDataFrame(
         [
             ("1", "1", "2025-01-01", "delivered", "100.00"),
@@ -59,6 +60,7 @@ def _silver(spark):
 
 
 def test_vendas_por_categoria_count_distinct_orders(spark):
+    """Verifica pedidos distintos (não linhas) por categoria."""
     df = build_vendas_por_categoria(_silver(spark)).collect()
     by_cat = {row.category: row for row in df}
 
@@ -70,6 +72,7 @@ def test_vendas_por_categoria_count_distinct_orders(spark):
 
 
 def test_pedidos_por_status(spark):
+    """Verifica contagem, receita e ticket médio por status."""
     df = {row.status: row for row in build_pedidos_por_status(_silver(spark)).collect()}
 
     assert df["delivered"].total_pedidos == 2
@@ -79,6 +82,7 @@ def test_pedidos_por_status(spark):
 
 
 def test_avaliacao_produto_no_fan_out(spark):
+    """Verifica que 1 review conta 1x mesmo com 2 itens do produto."""
     df = build_avaliacao_produto(_silver(spark)).collect()
     notebook = next(row for row in df if row.product_id == "1")
 
@@ -88,6 +92,7 @@ def test_avaliacao_produto_no_fan_out(spark):
 
 
 def test_resumo_clientes_ticket_medio_per_order(spark):
+    """Verifica ticket médio calculado por pedido, não por item."""
     df = {row.customer_id: row for row in build_resumo_clientes(_silver(spark)).collect()}
 
     assert df["1"].total_pedidos == 2

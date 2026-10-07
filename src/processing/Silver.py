@@ -51,6 +51,7 @@ def move_column_to_end(df, col_name):
 
 
 def transform_payments(df):
+    """Normaliza IDs e payment_type e converte payment_value para decimal."""
     return (
         df.withColumn("payment_id", regexp_replace(col("payment_id"), "^PAY0*", ""))
         .withColumn("order_id", regexp_replace(col("order_id"), "^O0*", ""))
@@ -60,6 +61,7 @@ def transform_payments(df):
 
 
 def transform_customers(df):
+    """Normaliza IDs, preenche nulos e converte signup_date."""
     return (
         df.withColumn("customer_id", regexp_replace(col("customer_id"), "^C0*", ""))
         .withColumn("email", when(col("email").isNull(), lit("não informado")).otherwise(col("email")))
@@ -69,6 +71,7 @@ def transform_customers(df):
 
 
 def transform_orders(df):
+    """Normaliza IDs e status, trata cliente ausente e converte data e valor."""
     return (
         df.withColumn("order_id", regexp_replace(col("order_id"), "^O0*", ""))
         .withColumn("customer_id", when(col("customer_id").isNull(), lit("desconhecido"))
@@ -80,6 +83,7 @@ def transform_orders(df):
 
 
 def transform_order_items(df):
+    """Normaliza IDs e converte quantity e unit_price."""
     return (
         df.withColumn("order_id", regexp_replace(col("order_id"), "^O0*", ""))
         .withColumn("item_id", regexp_replace(col("item_id"), "^O0*", ""))
@@ -90,6 +94,7 @@ def transform_order_items(df):
 
 
 def transform_products(df):
+    """Normaliza IDs, preenche nome ausente e converte price e stock."""
     return (
         df.withColumn("product_id", regexp_replace(col("product_id"), "^P0*", ""))
         .withColumn("product_name", when(col("product_name").isNull(), lit("Produto sem nome"))
@@ -100,6 +105,7 @@ def transform_products(df):
 
 
 def transform_reviews(df):
+    """Normaliza IDs, preenche comentário ausente e converte rating e data."""
     return (
         df.withColumn("review_id", regexp_replace(col("review_id"), "^R0*", ""))
         .withColumn("order_id", regexp_replace(col("order_id"), "^O0*", ""))
@@ -122,6 +128,7 @@ TABLE_TRANSFORMS = {
 
 
 def run(spark, preview: bool = False):
+    """Aplica dedup, transforms e fuso SP, persistindo as tabelas silver.*."""
     spark.sql("CREATE DATABASE IF NOT EXISTS silver")
 
     for table_name, transform_fn in TABLE_TRANSFORMS.items():
@@ -146,6 +153,7 @@ def run(spark, preview: bool = False):
 
 
 def main():
+    """Ponto de entrada: abre a sessão Spark e executa a Silver com preview."""
     spark = get_spark("silver-process")
     run(spark, preview=True)
 

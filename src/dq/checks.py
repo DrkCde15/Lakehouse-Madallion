@@ -54,21 +54,26 @@ class DQReport:
     results: list = field(default_factory=list)
 
     def add(self, table: str, check: str, severity: str, passed: bool, detail: str = "") -> None:
+        """Registra o resultado de um check no relatório."""
         self.results.append(CheckResult(table, check, severity, passed, detail))
 
     @property
     def errors(self) -> list:
+        """Retorna os checks de severidade ERROR que falharam."""
         return [r for r in self.results if r.severity == ERROR and not r.passed]
 
     @property
     def warnings(self) -> list:
+        """Retorna os checks de severidade WARN que falharam."""
         return [r for r in self.results if r.severity == WARN and not r.passed]
 
     @property
     def ok(self) -> bool:
+        """Indica se a camada foi aprovada (nenhum ERROR falhou)."""
         return not self.errors
 
     def log_summary(self) -> None:
+        """Registra no log as falhas e o resumo da camada."""
         for r in self.results:
             if r.passed:
                 continue
@@ -86,6 +91,7 @@ class DQReport:
 # ---------------------------------------------------------------
 
 def _load(spark, layer: str, table: str, report: DQReport) -> DataFrame | None:
+    """Carrega layer.table do Spark; registra ERROR se a tabela não existir."""
     name = f"{layer}.{table}"
     try:
         df = spark.table(name)
@@ -97,16 +103,19 @@ def _load(spark, layer: str, table: str, report: DQReport) -> DataFrame | None:
 
 
 def _not_empty(df: DataFrame, name: str, report: DQReport) -> None:
+    """Verifica se a tabela tem ao menos uma linha."""
     n = df.count()
     report.add(name, "not_empty", ERROR, n > 0, f"count={n}")
 
 
 def _columns_exist(df: DataFrame, name: str, cols: list, report: DQReport) -> None:
+    """Verifica se as colunas esperadas existem no DataFrame."""
     missing = [c for c in cols if c not in df.columns]
     report.add(name, f"columns_exist{tuple(cols)}", ERROR, not missing, f"ausentes={missing}")
 
 
 def _unique(df: DataFrame, name: str, cols: list, report: DQReport) -> None:
+    """Verifica se a combinação de colunas é única em todas as linhas."""
     total = df.count()
     distinct = df.select(*cols).distinct().count()
     report.add(
@@ -116,22 +125,26 @@ def _unique(df: DataFrame, name: str, cols: list, report: DQReport) -> None:
 
 
 def _not_null(df: DataFrame, name: str, cols: list, report: DQReport, severity: str = ERROR) -> None:
+    """Verifica se as colunas informadas não têm nulos."""
     for c in cols:
         n = df.filter(F.col(c).isNull()).count()
         report.add(name, f"not_null({c})", severity, n == 0, f"{n} nulos")
 
 
 def _range(df: DataFrame, name: str, col: str, lo, hi, report: DQReport, severity: str = ERROR) -> None:
+    """Verifica se os valores não nulos de col estão entre lo e hi."""
     n = df.filter(F.col(col).isNotNull() & ((F.col(col) < lo) | (F.col(col) > hi))).count()
     report.add(name, f"range({col}, {lo}..{hi})", severity, n == 0, f"{n} valores fora da faixa")
 
 
 def _non_negative(df: DataFrame, name: str, col: str, report: DQReport, severity: str = WARN) -> None:
+    """Verifica se não há valores negativos em col (ignora nulos)."""
     n = df.filter(F.col(col).isNotNull() & (F.col(col) < 0)).count()
     report.add(name, f"non_negative({col})", severity, n == 0, f"{n} negativos")
 
 
 def _in_set(df: DataFrame, name: str, col: str, allowed: set, report: DQReport, severity: str = ERROR) -> None:
+    """Verifica se os valores não nulos de col pertencem ao conjunto permitido."""
     n = df.filter(F.col(col).isNotNull() & ~F.col(col).isin(list(allowed))).count()
     report.add(name, f"in_set({col})", severity, n == 0, f"{n} valores fora do conjunto")
 
@@ -141,6 +154,7 @@ def _orphan(
     parent: DataFrame, parent_col: str,
     report: DQReport, exclude: set = frozenset(), severity: str = ERROR,
 ) -> None:
+    """Verifica se cada chave de col existe na tabela pai, ignorando sentinelas."""
     child = (
         df.filter(F.col(col).isNotNull() & ~F.col(col).isin(list(exclude)))
         .select(col).distinct()
@@ -162,6 +176,7 @@ def _orphan(
 # ---------------------------------------------------------------
 
 def run_bronze(spark) -> DQReport:
+    """Executa os checks estruturais da Bronze e retorna o relatório."""
     report = DQReport("bronze")
     for table in TABLES:
         df = _load(spark, "bronze", table, report)
@@ -175,6 +190,7 @@ def run_bronze(spark) -> DQReport:
 
 
 def run_silver(spark) -> DQReport:
+    """Executa unicidade, domínio, intervalo e referencialidade da Silver."""
     report = DQReport("silver")
     frames: dict[str, DataFrame] = {}
     for table in TABLES:
@@ -242,6 +258,7 @@ GOLD_METRICS = {
 
 
 def run_gold(spark) -> DQReport:
+    """Executa não-nulidade das métricas e faixas da Gold."""
     report = DQReport("gold")
     frames: dict[str, DataFrame] = {}
     for table in GOLD_TABLES:
@@ -280,6 +297,7 @@ LAYERS = {
 
 
 def main(argv=None) -> None:
+    """Ponto de entrada CLI: valida a camada e sai com erro se houver ERROR."""
     parser = argparse.ArgumentParser(description="Data quality checks do lakehouse")
     parser.add_argument("layer", choices=tuple(LAYERS), help="Camada a validar")
     args = parser.parse_args(argv)

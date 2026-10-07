@@ -25,6 +25,7 @@ SILVER_TABLES = ("payments", "customers", "orders", "order_items", "products", "
 
 
 def load_silver(spark) -> dict:
+    """Carrega as 6 tabelas silver.* em um dicionário."""
     tables = {}
     for table_name in SILVER_TABLES:
         tables[table_name] = spark.table(f"silver.{table_name}")
@@ -33,6 +34,7 @@ def load_silver(spark) -> dict:
 
 
 def build_vendas_por_categoria(silver: dict):
+    """Agrega receita, itens e pedidos distintos por categoria."""
     return (
         silver["order_items"]
         .join(silver["products"], on="product_id", how="left")
@@ -49,6 +51,7 @@ def build_vendas_por_categoria(silver: dict):
 
 
 def build_pedidos_por_status(silver: dict):
+    """Agrega contagem, receita e ticket médio por status."""
     return (
         silver["orders"]
         .groupBy("status")
@@ -62,6 +65,7 @@ def build_pedidos_por_status(silver: dict):
 
 
 def build_avaliacao_produto(silver: dict):
+    """Agrega notas por produto sem fan-out (1 avaliação conta 1x por produto)."""
     return (
         silver["reviews"]
         .join(silver["order_items"], on="order_id", how="left")
@@ -82,6 +86,7 @@ def build_avaliacao_produto(silver: dict):
 
 def build_resumo_clientes(silver: dict):
     # Ticket médio por pedido (total_amount), consistente com gold.pedidos_por_status
+    """Agrega gasto total, ticket médio e período de pedidos por cliente."""
     return (
         silver["orders"]
         .join(silver["customers"], on="customer_id", how="left")
@@ -106,6 +111,7 @@ GOLD_BUILDERS = {
 
 
 def run(spark, show: bool = False):
+    """Constrói as 4 tabelas gold.* em modo overwrite."""
     spark.sql("CREATE DATABASE IF NOT EXISTS gold")
 
     logger.info("Carregando tabelas Silver para agregação...")
@@ -122,6 +128,7 @@ def run(spark, show: bool = False):
 
 
 def main():
+    """Ponto de entrada: abre a sessão Spark e executa a Gold exibindo o resultado."""
     spark = get_spark("gold-aggregate")
     run(spark, show=True)
 

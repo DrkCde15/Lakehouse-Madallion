@@ -23,6 +23,7 @@ from src.dq.checks import (  # noqa: E402
 
 
 def failed(report, severity=None):
+    """Filtra os resultados reprovados, opcionalmente por severidade."""
     return [
         r for r in report.results
         if not r.passed and (severity is None or r.severity == severity)
@@ -30,6 +31,7 @@ def failed(report, severity=None):
 
 
 def test_unique_passes_on_distinct_keys(spark):
+    """Verifica que _unique aprova chaves sem repetição."""
     df = spark.createDataFrame([(1,), (2,), (3,)], "id int")
     report = DQReport("silver")
     _unique(df, "silver.t", ["id"], report)
@@ -38,6 +40,7 @@ def test_unique_passes_on_distinct_keys(spark):
 
 
 def test_unique_fails_on_duplicates(spark):
+    """Verifica que _unique reprova duplicatas com ERROR."""
     df = spark.createDataFrame([(1,), (1,), (2,)], "id int")
     report = DQReport("silver")
     _unique(df, "silver.t", ["id"], report)
@@ -47,6 +50,7 @@ def test_unique_fails_on_duplicates(spark):
 
 
 def test_not_null_detects_nulls(spark):
+    """Verifica que _not_null detecta nulos com ERROR."""
     df = spark.createDataFrame([(1, None), (2, "x")], "id int, name string")
     report = DQReport("silver")
     _not_null(df, "silver.t", ["name"], report)
@@ -55,6 +59,7 @@ def test_not_null_detects_nulls(spark):
 
 
 def test_range_error_on_out_of_bounds(spark):
+    """Verifica que _range reprova valores fora da faixa."""
     df = spark.createDataFrame([(1,), (6,), (0,)], "rating int")
     report = DQReport("silver")
     _range(df, "silver.t", "rating", 1, 5, report)
@@ -62,6 +67,7 @@ def test_range_error_on_out_of_bounds(spark):
 
 
 def test_range_ignores_nulls(spark):
+    """Verifica que _range ignora valores nulos."""
     df = spark.createDataFrame([(1,), (None,)], "rating int")
     report = DQReport("silver")
     _range(df, "silver.t", "rating", 1, 5, report)
@@ -69,6 +75,7 @@ def test_range_ignores_nulls(spark):
 
 
 def test_non_negative_is_warn_by_default(spark):
+    """Verifica que negativo gera WARN sem bloquear o relatório."""
     df = spark.createDataFrame([(10.0,), (-100.0,)], "amount double")
     report = DQReport("silver")
     _non_negative(df, "silver.t", "amount", report)
@@ -78,6 +85,7 @@ def test_non_negative_is_warn_by_default(spark):
 
 
 def test_in_set_detects_invalid_values(spark):
+    """Verifica que _in_set reprova valores fora do conjunto."""
     df = spark.createDataFrame([("delivered",), ("unknown",)], "status string")
     report = DQReport("silver")
     _in_set(df, "silver.t", "status", {"delivered", "shipped"}, report)
@@ -85,6 +93,7 @@ def test_in_set_detects_invalid_values(spark):
 
 
 def test_orphan_excludes_sentinels(spark):
+    """Verifica que _orphan ignora chaves sentinela."""
     child = spark.createDataFrame([("1",), ("999",), ("desconhecido",)], "customer_id string")
     parent = spark.createDataFrame([("1",), ("2",)], "customer_id string")
     report = DQReport("silver")
@@ -96,6 +105,7 @@ def test_orphan_excludes_sentinels(spark):
 
 
 def test_orphan_error_when_real_orphan(spark):
+    """Verifica que _orphan reprova órfão real com ERROR."""
     child = spark.createDataFrame([("1",), ("2",)], "order_id string")
     parent = spark.createDataFrame([("1",)], "order_id string")
     report = DQReport("silver")
@@ -105,6 +115,7 @@ def test_orphan_error_when_real_orphan(spark):
 
 
 def test_report_ok_blocked_by_errors_only(spark):
+    """Verifica que só ERROR bloqueia o relatório (WARN não bloqueia)."""
     df = spark.createDataFrame([(10.0,), (-1.0,)], "amount double")
     report = DQReport("gold")
     _non_negative(df, "gold.t", "amount", report)  # WARN

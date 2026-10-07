@@ -19,6 +19,7 @@ TABLE_NAMES = ("payments", "customers", "orders", "order_items", "products", "re
 
 
 def read_csv(spark, table_name: str):
+    """Lê o CSV bruto da tabela como strings (cabeçalho + UTF-8)."""
     path = BRONZE_CSV_DIR / f"{table_name}.csv"
     if not path.exists():
         raise FileNotFoundError(f"CSV não encontrado: {path}")
@@ -32,6 +33,7 @@ def read_csv(spark, table_name: str):
 
 
 def run(spark):
+    """Ingere os 6 CSVs para tabelas Delta bronze.* em modo overwrite."""
     spark.sql("CREATE DATABASE IF NOT EXISTS bronze")
 
     tables = {name: read_csv(spark, name) for name in TABLE_NAMES}
@@ -56,6 +58,7 @@ def run(spark):
 
 
 def main():
+    """Ponto de entrada: abre a sessão Spark e executa a ingestão Bronze."""
     spark = get_spark("bronze-ingest")
     run(spark)
 

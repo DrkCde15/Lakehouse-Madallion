@@ -59,32 +59,39 @@ def _is_missing(s: pd.Series) -> pd.Series:
 
 
 def _strip_prefix(s: pd.Series, pattern: str) -> pd.Series:
+    """Remove o prefixo com zeros (ex.: 'O000001' vira '1')."""
     return s.astype(str).str.replace(pattern, "", regex=True)
 
 
 def _norm_lower(s: pd.Series) -> pd.Series:
+    """Apara espaços e converte para minúsculas."""
     return s.astype(str).str.strip().str.lower()
 
 
 def _to_number(s: pd.Series) -> pd.Series:
+    """Converte para número; falha de cast vira NaN (como o try_cast)."""
     return pd.to_numeric(s, errors="coerce")
 
 
 def _to_int(s: pd.Series) -> pd.Series:
+    """Converte para inteiro anulável; falha de cast vira NA."""
     return pd.to_numeric(s, errors="coerce").astype("Int64")
 
 
 def _to_date(s: pd.Series) -> pd.Series:
+    """Converte para data; falha de cast vira NaT."""
     return pd.to_datetime(s, errors="coerce").dt.date
 
 
 def _fill_missing(s: pd.Series, default: str) -> pd.Series:
+    """Preenche nulos e strings vazias com o valor default."""
     out = s.copy()
     out[_is_missing(out)] = default
     return out
 
 
 def _now_sp() -> datetime:
+    """Retorna o instante atual no fuso America/Sao_Paulo."""
     return datetime.now(SP_TZ)
 
 
@@ -112,6 +119,7 @@ def load_bronze(data_dir: Path | str = DATA_DIR) -> dict[str, pd.DataFrame]:
 # ---------------------------------------------------------------
 
 def transform_payments(df: pd.DataFrame) -> pd.DataFrame:
+    """Normaliza IDs e payment_type e converte payment_value para número."""
     out = df.copy()
     out["payment_id"] = _strip_prefix(out["payment_id"], r"^PAY0*")
     out["order_id"] = _strip_prefix(out["order_id"], r"^O0*")
@@ -121,6 +129,7 @@ def transform_payments(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def transform_customers(df: pd.DataFrame) -> pd.DataFrame:
+    """Normaliza IDs, preenche ausentes e converte signup_date."""
     out = df.copy()
     out["customer_id"] = _strip_prefix(out["customer_id"], r"^C0*")
     out["email"] = _fill_missing(out["email"], "não informado")
@@ -130,6 +139,7 @@ def transform_customers(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def transform_orders(df: pd.DataFrame) -> pd.DataFrame:
+    """Normaliza IDs e status, trata cliente ausente e converte data e valor."""
     out = df.copy()
     out["order_id"] = _strip_prefix(out["order_id"], r"^O0*")
     cust = _fill_missing(out["customer_id"], "desconhecido")
@@ -143,6 +153,7 @@ def transform_orders(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def transform_order_items(df: pd.DataFrame) -> pd.DataFrame:
+    """Normaliza IDs e converte quantity e unit_price."""
     out = df.copy()
     out["order_id"] = _strip_prefix(out["order_id"], r"^O0*")
     out["item_id"] = _strip_prefix(out["item_id"], r"^O0*")
@@ -153,6 +164,7 @@ def transform_order_items(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def transform_products(df: pd.DataFrame) -> pd.DataFrame:
+    """Normaliza IDs, preenche nome ausente e converte price e stock."""
     out = df.copy()
     out["product_id"] = _strip_prefix(out["product_id"], r"^P0*")
     out["product_name"] = _fill_missing(out["product_name"], "Produto sem nome")
@@ -162,6 +174,7 @@ def transform_products(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def transform_reviews(df: pd.DataFrame) -> pd.DataFrame:
+    """Normaliza IDs, preenche comentário ausente e converte rating e data."""
     out = df.copy()
     out["review_id"] = _strip_prefix(out["review_id"], r"^R0*")
     out["order_id"] = _strip_prefix(out["order_id"], r"^O0*")
@@ -200,6 +213,7 @@ def run_silver(bronze: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
 # ---------------------------------------------------------------
 
 def build_vendas_por_categoria(silver: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    """Agrega receita, itens e pedidos distintos por categoria."""
     merged = silver["order_items"].merge(silver["products"], on="product_id", how="left")
     merged["receita"] = merged["quantity"].astype(float) * merged["unit_price"].astype(float)
     g = merged.groupby("category", dropna=False)
@@ -213,6 +227,7 @@ def build_vendas_por_categoria(silver: dict[str, pd.DataFrame]) -> pd.DataFrame:
 
 
 def build_pedidos_por_status(silver: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    """Agrega contagem, receita e ticket médio por status."""
     g = silver["orders"].groupby("status", dropna=False)
     out = g.agg(
         total_pedidos=("order_id", "nunique"),
@@ -223,6 +238,7 @@ def build_pedidos_por_status(silver: dict[str, pd.DataFrame]) -> pd.DataFrame:
 
 
 def build_avaliacao_produto(silver: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    """Agrega notas por produto sem fan-out (1 avaliação conta 1x por produto)."""
     merged = (
         silver["reviews"]
         .merge(silver["order_items"], on="order_id", how="left")
@@ -241,6 +257,7 @@ def build_avaliacao_produto(silver: dict[str, pd.DataFrame]) -> pd.DataFrame:
 
 
 def build_resumo_clientes(silver: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    """Agrega gasto total, ticket médio e período de pedidos por cliente."""
     merged = silver["orders"].merge(silver["customers"], on="customer_id", how="left")
     g = merged.groupby(["customer_id", "customer_name", "state", "city"], dropna=False)
     out = g.agg(
@@ -262,6 +279,7 @@ GOLD_BUILDERS = {
 
 
 def run_gold(silver: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
+    """Constrói as 4 tabelas Gold em pandas e retorna o dicionário."""
     return {name: fn(silver) for name, fn in GOLD_BUILDERS.items()}
 
 
@@ -284,21 +302,26 @@ class DQReport:
     results: list = field(default_factory=list)
 
     def add(self, table: str, check: str, severity: str, passed: bool, detail: str = "") -> None:
+        """Registra o resultado de um check no relatório."""
         self.results.append(CheckResult(table, check, severity, passed, detail))
 
     @property
     def errors(self) -> list:
+        """Retorna os checks de severidade ERROR que falharam."""
         return [r for r in self.results if r.severity == ERROR and not r.passed]
 
     @property
     def warnings(self) -> list:
+        """Retorna os checks de severidade WARN que falharam."""
         return [r for r in self.results if r.severity == WARN and not r.passed]
 
     @property
     def ok(self) -> bool:
+        """Indica se a camada foi aprovada (nenhum ERROR falhou)."""
         return not self.errors
 
     def summary(self) -> str:
+        """Resume o relatório em uma linha (checks, erros e avisos)."""
         n = len(self.results)
         return (
             f"DQ layer={self.layer} checks={n} "
@@ -307,6 +330,7 @@ class DQReport:
         )
 
     def failures_table(self) -> pd.DataFrame:
+        """Retorna as falhas como DataFrame para exibição no notebook."""
         rows = [
             {"severity": r.severity, "tabela": r.table, "check": r.check, "detalhe": r.detail}
             for r in self.results if not r.passed
@@ -317,10 +341,12 @@ class DQReport:
 
 
 def _check_not_empty(df: pd.DataFrame, name: str, report: DQReport) -> None:
+    """Verifica se a tabela tem ao menos uma linha."""
     report.add(name, "not_empty", ERROR, len(df) > 0, f"count={len(df)}")
 
 
 def _check_unique(df: pd.DataFrame, name: str, cols: list, report: DQReport) -> None:
+    """Verifica se a combinação de colunas é única em todas as linhas."""
     distinct = df.drop_duplicates(subset=cols).shape[0]
     report.add(
         name, f"unique({'+'.join(cols)})", ERROR, len(df) == distinct,
@@ -330,6 +356,7 @@ def _check_unique(df: pd.DataFrame, name: str, cols: list, report: DQReport) -> 
 
 def _check_not_null(df: pd.DataFrame, name: str, cols: list, report: DQReport,
                     severity: str = ERROR) -> None:
+    """Verifica se as colunas informadas não têm nulos."""
     for c in cols:
         n = int(df[c].isna().sum())
         report.add(name, f"not_null({c})", severity, n == 0, f"{n} nulos")
@@ -337,6 +364,7 @@ def _check_not_null(df: pd.DataFrame, name: str, cols: list, report: DQReport,
 
 def _check_range(df: pd.DataFrame, name: str, col: str, lo, hi, report: DQReport,
                  severity: str = ERROR) -> None:
+    """Verifica se os valores não nulos de col estão entre lo e hi."""
     s = pd.to_numeric(df[col], errors="coerce")
     n = int(((s < lo) | (s > hi)).sum())
     report.add(name, f"range({col}, {lo}..{hi})", severity, n == 0, f"{n} fora da faixa")
@@ -344,6 +372,7 @@ def _check_range(df: pd.DataFrame, name: str, col: str, lo, hi, report: DQReport
 
 def _check_non_negative(df: pd.DataFrame, name: str, col: str, report: DQReport,
                         severity: str = WARN) -> None:
+    """Verifica se não há valores negativos em col (ignora nulos)."""
     s = pd.to_numeric(df[col], errors="coerce")
     n = int((s < 0).sum())
     report.add(name, f"non_negative({col})", severity, n == 0, f"{n} negativos")
@@ -351,6 +380,7 @@ def _check_non_negative(df: pd.DataFrame, name: str, col: str, report: DQReport,
 
 def _check_in_set(df: pd.DataFrame, name: str, col: str, allowed: set, report: DQReport,
                   severity: str = ERROR) -> None:
+    """Verifica se os valores não nulos de col pertencem ao conjunto permitido."""
     s = df[col]
     n = int((s.notna() & ~s.isin(allowed)).sum())
     report.add(name, f"in_set({col})", severity, n == 0, f"{n} fora do conjunto")
@@ -358,6 +388,7 @@ def _check_in_set(df: pd.DataFrame, name: str, col: str, allowed: set, report: D
 
 def _check_orphan(df: pd.DataFrame, name: str, col: str, parent: pd.DataFrame, parent_col: str,
                   report: DQReport, exclude: set = frozenset(), severity: str = ERROR) -> None:
+    """Verifica se cada chave de col existe na tabela pai, ignorando sentinelas."""
     child_keys = set(df.loc[df[col].notna() & ~df[col].isin(exclude), col].drop_duplicates())
     parent_keys = set(parent[parent_col].dropna().drop_duplicates())
     n = len(child_keys - parent_keys)
@@ -376,6 +407,7 @@ GOLD_METRICS = {
 
 
 def run_dq_bronze(bronze: dict[str, pd.DataFrame]) -> DQReport:
+    """Executa os checks estruturais da Bronze e retorna o relatório."""
     report = DQReport("bronze")
     for name, df in bronze.items():
         full = f"bronze.{name}"
@@ -388,6 +420,7 @@ def run_dq_bronze(bronze: dict[str, pd.DataFrame]) -> DQReport:
 
 
 def run_dq_silver(silver: dict[str, pd.DataFrame]) -> DQReport:
+    """Executa unicidade, domínio, intervalo e referencialidade da Silver."""
     report = DQReport("silver")
     for name, df in silver.items():
         full = f"silver.{name}"
@@ -433,6 +466,7 @@ def run_dq_silver(silver: dict[str, pd.DataFrame]) -> DQReport:
 
 
 def run_dq_gold(gold: dict[str, pd.DataFrame]) -> DQReport:
+    """Executa não-nulidade das métricas e faixas da Gold."""
     report = DQReport("gold")
     for name, df in gold.items():
         full = f"gold.{name}"

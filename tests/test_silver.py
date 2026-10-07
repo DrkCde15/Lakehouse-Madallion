@@ -14,6 +14,7 @@ from src.processing.Silver import (
 
 
 def test_transform_payments_keeps_order_id(spark):
+    """Verifica IDs normalizados e payment_type em minúsculas."""
     df = spark.createDataFrame(
         [("PAY000001", "O000001", " PIX ", "1981.3")],
         ["payment_id", "order_id", "payment_type", "payment_value"],
@@ -27,6 +28,7 @@ def test_transform_payments_keeps_order_id(spark):
 
 
 def test_transform_orders_normalizes_status_and_ids(spark):
+    """Verifica IDs sem prefixo e status normalizado."""
     df = spark.createDataFrame(
         [("O000001", "C00442", "2025-01-22", "DELIVERED", "1981.3")],
         ["order_id", "customer_id", "order_date", "status", "total_amount"],
@@ -40,6 +42,7 @@ def test_transform_orders_normalizes_status_and_ids(spark):
 
 
 def test_transform_orders_null_customer_becomes_default(spark):
+    """Verifica que cliente nulo vira 'desconhecido'."""
     schema = StructType(
         [
             StructField(name, StringType())
@@ -56,6 +59,7 @@ def test_transform_orders_null_customer_becomes_default(spark):
 
 
 def test_transform_customers_null_defaults(spark):
+    """Verifica defaults de email e state nulos."""
     schema = StructType(
         [
             StructField(name, StringType())
@@ -74,6 +78,7 @@ def test_transform_customers_null_defaults(spark):
 
 
 def test_transform_products_keeps_decimal_price(spark):
+    """Verifica preço como decimal e estoque como inteiro."""
     df = spark.createDataFrame(
         [("P0001", "Smartphone", "899.9", "68")],
         ["product_id", "product_name", "price", "stock"],
@@ -86,6 +91,7 @@ def test_transform_products_keeps_decimal_price(spark):
 
 
 def test_dedup_keys_cover_all_tables():
+    """Verifica que toda tabela tem chave de deduplicação."""
     assert set(DEDUP_KEYS) == {
         "payments",
         "customers",
@@ -97,6 +103,7 @@ def test_dedup_keys_cover_all_tables():
 
 
 def test_dedup_removes_duplicate_order_id(spark):
+    """Verifica remoção de order_id duplicado."""
     df = spark.createDataFrame(
         [
             ("O1", "C1", "2025-01-01", "delivered", "10.0"),
@@ -109,12 +116,14 @@ def test_dedup_removes_duplicate_order_id(spark):
 
 
 def test_move_column_to_end(spark):
+    """Verifica o deslocamento da coluna para o fim."""
     df = spark.createDataFrame([("a", "b")], ["col1", "_ingested_at"])
     assert move_column_to_end(df, "_ingested_at").columns == ["col1", "_ingested_at"]
     assert move_column_to_end(df, "col1").columns == ["_ingested_at", "col1"]
 
 
 def test_normalize_timestamp_sp(spark):
+    """Verifica a conversão do timestamp para São Paulo sem perder o valor."""
     df = spark.createDataFrame([("2025-01-01 12:00:00",)], ["_ingested_at"])
     out = normalize_timestamp_sp(df)
 

@@ -13,6 +13,7 @@ from src import pandas_medallion as med
 
 
 def test_strip_prefix_and_lower():
+    """Verifica remoção de prefixos e normalização de texto."""
     df = pd.DataFrame([("PAY000001", "O000001", " PIX ")],
                       columns=["payment_id", "order_id", "payment_type"])
     df["payment_value"] = ["10.5"]
@@ -24,6 +25,7 @@ def test_strip_prefix_and_lower():
 
 
 def test_empty_string_gets_default():
+    """Verifica que string vazia recebe o valor default."""
     df = pd.DataFrame([("C00001", "", "")],
                       columns=["customer_id", "email", "state"])
     df["signup_date"] = ["2024-10-08"]
@@ -34,6 +36,7 @@ def test_empty_string_gets_default():
 
 
 def test_silver_dedup_removes_duplicates():
+    """Verifica que a Silver remove os 10 duplicados do gerador."""
     bronze = med.load_bronze()
     n_bronze = len(bronze["orders"])
     silver = med.run_silver(bronze)
@@ -42,6 +45,7 @@ def test_silver_dedup_removes_duplicates():
 
 def test_gold_avaliacao_no_fan_out():
     # Pedido 1 tem 2 itens do MESMO produto + 1 review -> conta 1x
+    """Verifica que 1 review conta 1x mesmo com 2 itens do produto."""
     silver = {
         "reviews": pd.DataFrame(
             [("1", "1", "1", 5, "ótimo", "2025-01-05")],
@@ -60,6 +64,7 @@ def test_gold_avaliacao_no_fan_out():
 
 
 def test_dq_reports_ok_with_only_warns():
+    """Verifica que o DQ aprova com apenas WARNs de negativos."""
     bronze = med.load_bronze()
     silver = med.run_silver(bronze)
     gold = med.run_gold(silver)
@@ -71,6 +76,7 @@ def test_dq_reports_ok_with_only_warns():
 
 
 def test_module_has_no_pyspark_dependency():
+    """Verifica que o módulo pandas não importa PySpark/Delta."""
     src = (ROOT / "src" / "pandas_medallion.py").read_text(encoding="utf-8")
     for forbidden in ("import pyspark", "from pyspark", "import delta", "from delta",
                       "get_spark"):

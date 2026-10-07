@@ -15,6 +15,7 @@ align_spark_runtime()
 
 @pytest.fixture(scope="session")
 def spark():
+    """Fixture de sessão: cria a SparkSession local compartilhada pelos testes."""
     session = (
         SparkSession.builder
         .master("local[2]")

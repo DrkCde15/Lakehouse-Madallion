@@ -13,12 +13,14 @@ from scripts.generate_data import HEADERS, generate  # noqa: E402
 
 
 def read_csv(path: Path) -> tuple[list, list]:
+    """Lê um CSV gerado retornando (cabeçalho, linhas)."""
     with path.open(encoding="utf-8") as f:
         rows = list(csv.reader(f))
     return rows[0], rows[1:]
 
 
 def test_headers_match_bronze_schema(tmp_path):
+    """Verifica que os CSVs usam os cabeçalhos esperados."""
     generate(tmp_path, seed=1, n_customers=10, n_orders=20, n_reviews=10)
     for table, header in HEADERS.items():
         got, _ = read_csv(tmp_path / f"{table}.csv")
@@ -26,6 +28,7 @@ def test_headers_match_bronze_schema(tmp_path):
 
 
 def test_row_counts(tmp_path):
+    """Verifica as contagens de linhas, incluindo as 10 duplicatas sujas."""
     counts = generate(tmp_path, seed=1, n_customers=10, n_orders=30, n_reviews=25)
     assert counts["customers"] == 10
     assert counts["orders"] == 30 + 10  # 10 duplicatas sujas
@@ -37,6 +40,7 @@ def test_row_counts(tmp_path):
 
 
 def test_deterministic_with_same_seed(tmp_path):
+    """Verifica que o mesmo seed gera bytes idênticos."""
     a, b = tmp_path / "a", tmp_path / "b"
     generate(a, seed=42, n_customers=10, n_orders=30, n_reviews=20)
     generate(b, seed=42, n_customers=10, n_orders=30, n_reviews=20)
@@ -45,6 +49,7 @@ def test_deterministic_with_same_seed(tmp_path):
 
 
 def test_different_seed_changes_data(tmp_path):
+    """Verifica que seeds diferentes geram dados diferentes."""
     a, b = tmp_path / "a", tmp_path / "b"
     generate(a, seed=1, n_customers=10, n_orders=30, n_reviews=20)
     generate(b, seed=2, n_customers=10, n_orders=30, n_reviews=20)
@@ -52,6 +57,7 @@ def test_different_seed_changes_data(tmp_path):
 
 
 def test_dirty_injects_expected_sujeira(tmp_path):
+    """Verifica cada sujeira proposital do modo dirty."""
     generate(tmp_path, seed=42, n_customers=50, n_orders=100, n_reviews=60)
 
     _, orders = read_csv(tmp_path / "orders.csv")
@@ -76,6 +82,7 @@ def test_dirty_injects_expected_sujeira(tmp_path):
 
 
 def test_clean_mode_has_no_sujeira(tmp_path):
+    """Verifica que o modo clean não injeta sujeira."""
     generate(tmp_path, seed=42, n_customers=50, n_orders=100, n_reviews=60, dirty=False)
 
     _, orders = read_csv(tmp_path / "orders.csv")
@@ -97,6 +104,7 @@ def test_clean_mode_has_no_sujeira(tmp_path):
 
 
 def test_referential_integrity(tmp_path):
+    """Verifica que as chaves estrangeiras existem nas tabelas pai."""
     generate(tmp_path, seed=7, n_customers=40, n_orders=80, n_reviews=50)
 
     _, customers = read_csv(tmp_path / "customers.csv")
@@ -119,6 +127,7 @@ def test_referential_integrity(tmp_path):
 
 
 def test_id_formats_and_domains(tmp_path):
+    """Verifica formatos de ID e domínios de status e rating."""
     generate(tmp_path, seed=7, n_customers=40, n_orders=80, n_reviews=50)
 
     _, customers = read_csv(tmp_path / "customers.csv")

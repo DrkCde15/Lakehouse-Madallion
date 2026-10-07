@@ -34,6 +34,7 @@ _PACKAGES = (
 
 
 def _truthy(value: str) -> bool:
+    """Interpreta '1/true/yes/on' (qualquer caixa) como verdadeiro."""
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
