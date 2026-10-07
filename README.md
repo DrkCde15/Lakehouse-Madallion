@@ -132,7 +132,7 @@ python -m src.dq.checks silver
 # Recriar os CSVs de data/ (determinístico por --seed; --clean sem sujeira de exemplo)
 python -m scripts.generate_data
 
-# Notebook
+# Notebook (leve: só pandas + jupyter — sem Spark/Java/MinIO)
 jupyter lab notebooks/01_medallion_overview.ipynb
 
 # Testes
